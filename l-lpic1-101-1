@@ -1,0 +1,808 @@
+# Learn Linux, 101, 硬件置配
+
+标签（空格分隔）： lpi-pre-exam 翻译
+
+---
+
+## 本篇文章概览
+- 开启或者关闭集成外围设备
+- 在有或者没有外围设备（比如键盘）的情况下配置操作系统
+- 对不同类型的大容量存储设备进行分区
+- 理解热拔插和冷拔插设备的区别
+- 知道如何使用硬件设备资源
+- 使用工具列出和操作硬件设备
+- 理解sysfs,procfs,udev以及dbus
+
+## 计算机硬件
+如今的计算机从IBM PCs(1981)开始走了很长的一段路。除了速度、内存、存储容量的急速增长外，可能最显著的变化就是在配置和设置上。在这篇文章中，我覆盖了一些当今电脑常用的硬件设备配置，探索了一部分linux的列出和管理设备的命令。
+
+此文能帮你准备LIPC-1 exam 101，该考试的权重为2。
+
+## 先决条件
+为了从本系列教程中获得最大的收益，你需要具有一定的Linux基础知识和可用的Linux系统，在这个系统上你可以练习本教程中介绍的命令。有时不同版本的程序格式输出不同，所以你的结果可能不总是和这里显示的列表和数字完全一样。本教程中的示例来自具有BIOS或者UEFI的64为操作系统。
+
+## 硬件设置
+您通常使用BIOS或UEFI固件来配置设置。除非某个设置是UEFI特有的，否则一般情况下我使用BIOS中的设置来替代BIOS和UEFI都有的设置。
+打开电脑时，您可以访问BIOS设置。通常，在打开计算机后，但在操作系统加载开始之前，按下Del、F1或F8键即可完成此操作。随着掉脑启动速度变得越来越快，固态硬盘( SSDs )将引导时间缩短到几秒钟，您可能会发现您的系统有一个特殊的按钮或按键序列要使用。查看系统文档，了解如何访问BIOS设置。这里显示的例子说明了你可能会发现的设置类型，但是你的BIOS界面的实际布局可能与我的不同。
+
+图1显示了我的系统BIOS示例。在此屏幕上，您可以更改系统日期和时间。如果有旧软盘驱动器，也可以更改其参数。您还会看到已安装驱动器的摘要。我的系统只有SATA驱动器，尽管板载控制器也支持IDE驱动器。
+
+图1
+![图1][1]
+
+如果您的系统支持旧式外围设备接口，您可能有一个地方来配置它们。在我的情况下，我可以使用高级菜单来配置串行和并行端口中断请求( IRQs )和I / O端口起始地址。图2显示了我的系统的高级设置。除了配置传统串行和并行端口，请注意，我可以启用或禁用板载LAN和1394 (火线)控制器。请注意，我已经禁用了通过LAN控制器引导ROM。如果希望系统通过LAN从远程服务器加载，可以启用引导ROM。您可能希望将这一操作用于售货亭机器或用于重新映像大量系统。、
+
+图2
+![图2][2]
+
+你也可以不通过鼠标键盘来配置bios。当出现引导错误或配置发生变化(如增加内存)时，许多系统(尤其是旧系统)要求您按键进入BIOS设置。如果系统没有键盘会发生什么？今天，您可能会插入通用串行总线( USB )键盘，但是当插入键盘时，带有PS2键盘连接器的旧系统有时会损坏。因此，在许多BIOS系统上，您可以禁用键盘本身，也可以禁用如果键盘不存在可能会收到的警告。我的系统上有一个键盘，所以如果启用了错误设置，我会等待“F1”，如图3所示。
+
+图3
+![图3][3]
+
+您可能需要做的另一个重要设置是引导设备的顺序。如图4所示，我的系统被设置为检查第一个软盘驱动器，然后是第一个SATA驱动器，最后是CD或DVD。我已经好几年没有可以用的软盘驱动器了，所以我可能会安全地把它从序列中删除。如果我的硬盘坏了，我有CD或DVD作为备份。请参阅教程“学习Linux，101 :引导系统”，了解如何选择CD或DVD，如果你想只从它引导一次的话
+
+图4
+![图4][4]
+
+于UEFI系统，许多设置类似于传统BIOS的设置，包括日期、时间以及板载设备是否启用。图5展示了lenovo yoga pro2的一个例子。
+
+图5
+![图5][5]
+
+当然，UEFI系统的一个主要区别是支持UEFI引导。您的系统可能支持仅UEFI引导，也可能支持传统的类似BIOS的引导。我的系统有一个引导模式参数，有两种选择，如图6所示。当我选择传统支持时，我可以启动传统系统或UEFI系统。如果我选择UEFI，我的系统只会启动UEFI系统。
+
+图6
+![图6][6]
+
+如果选择仅UEFI引导，那么您可能不会看到一些与传统支持相关的项目，例如您在图5中看到的传统USB支持选项。您可能还会有支持安全启动的选项，它只允许启动签名的二进制文件。图7显示了一些安全选项，如果选择仅UEFI引导，您可能会看到这些选项。在我的系统上，有状态值和选项可以更改。例如，用户的平台模式设置确认安全密钥已经安装。如果未安装密钥，则可能会改为设置该值。我可以使用重置到设置模式来安装新的密钥，或者我可以使用恢复出厂密钥来恢复预安装的出厂密钥。
+
+图7
+![图7][7]
+
+## 大容量存储设备
+计算机使用几种类型的大容量存储器，并且这种存储器可以以各种方式连接。今天，大多数大容量存储设备使用标准接口，当这些设备被连接时他们的配置通常是自动化的。在本教程的后面，您将看到如何确定设备需要哪些资源。现在，让我们看看不同类型的普通大容量存储设备。
+
+### 硬盘
+自20世纪80年代初以来，硬盘一直是个人电脑数据存储的主要工具。硬盘是密封的，包含几个记录表面或盘片。1980年推出的ST - 506容量为5MB，使用控制卡将计算机发出的请求转换为访问磁盘盘片上数据所需的内部命令。1984年，IBM推出了带有16位AT总线的IBM PC / AT计算机，后来被称为工业标准体系结构( ISA )总线。AT附件接口( ATA )标准化了控制卡和计算机之间的接口，保持了与ST - 506命令集的兼容性。20世纪80年代早期，Western Digital以集成驱动电子设备( IDE )的名义将控制器功能移动到驱动器外壳内部。你会发现几个后来的标准和术语，包括ATA - 1、ATA - 2、ATA - 4和EIDE等。当串行ATA ( SATA )于2003年推出时，最初的ATA接口被称为并行ATA ( PATA )。
+另一个流行的磁盘连接接口是小型计算机系统接口( SCSI )。SCSI是在1978年左右开发的，用于连接各种设备，包括硬盘和打印机。SCSI磁盘在较大的服务器中仍然很受欢迎。
+最初的ATA接口是为硬盘设计的。ATA接口扩展到ATA数据包接口( ATAPI )，用于其他设备，如软盘驱动器、Zip驱动器或CD驱动器。ATAPI增加了检测介质存在或弹出介质的功能，以及普通硬盘不需要的其他功能。ATAPI接口可以在数据包中携带SCSI命令，因此支持各种设备类型。
+如今，内部硬盘通常使用SCSI或SATA接口。还可以使用USB、IEE - 1394 (火线)、外部串行高级技术附件( eSATA )或苹果的Thunderbolt从外部连接驱动器。
+硬盘可以被分区以划分其空间用于不同的用途，并且它们可以被组合成阵列以实现冗余。也可以使用逻辑卷管理器等工具将硬盘分组在一起，以使几个较小的磁盘显示为一个或多个较大的磁盘。
+
+### CD、DVD设备
+CD、DVD和蓝光驱动器使用光存储来保存比软盘驱动器多得多的数据。早期的CD驱动器通常通过声卡连接，接口多种多样。后来，CD和DVD驱动器在ATAPI接口上实现了标准化。今天，你会发现光驱内部使用SATA连接，或者外部使用与硬盘相同的接口连接。软件包通常在CD或DVD上分发，CD或DVD最初是只读媒体。现在，使用设备和媒体，用户可以创建(刻录)他们自己的CDs和DVDs用于备份或数据存储。
+
+### 闪存者或U盘
+也许当今最常见的数据交换方式是闪存或拇指驱动器。这些驱动器使用非易失性RAM存储数据。它们比软盘可靠得多，速度更快，容量更大，并且可以重复使用多次，不同于CD或DVD介质。大部分大约有人类拇指那么大——因此得名——通常连接到USB端口。大多数支持USB 2.0，其最大速度为480毫秒。较新的设备支持速度高达5Gbps的USB 3.0。在编写本报告时，典型尺寸从1GB到256 GB不等，有一些更大的512 GB和1TB型号可供选择。你可以像硬盘一样划分拇指驱动器。如果你下载了一个新的Linux发行版，你可能会把它刻录到USB拇指驱动器上，这样你就可以从那个设备上安装它。
+
+### 固态硬盘
+固态驱动器( SSDs )是一种较新的驱动器形式，正在许多笔记本电脑中使用。与传统硬盘相比，固态硬盘更轻、速度更快、功耗更低，并且不会出现机械故障。固态硬盘通常像笔记本电脑一样，使用相同的接口，尽管这种配置会限制固态硬盘的理论能力。已经为基于PCI Express ( PCIe )的固态驱动器开发了一种称为NVM Express ( NVMe )的新附件。该规范旨在通过PCIe更好地使用固态硬盘。
+
+## 热拔插和冷拔插
+随着笔记本电脑使用的PCMCIA卡以及后来的CardBUS，热拔插设变得十分流行。Linux从2001年内核2.4开始引入热插拔支持。术语“冷插”被类比用于指在启动时物理连接到计算机的设备。
+随着USB和IEEE - 1394火线设备的出现，热插拔成为了常态而非例外。如今，高端服务器可以在单一系统上多路复用的Linux系统之间动态移动内存或CPU等资源。其结果是几乎任何东西都可以被热插拔。因此，Linux系统现在只使用几个冷插设备来启动系统，然后使用驱动udev规则的热插事件来激活所有其他设备。甚至冷插设备也被重新扫描以驱动udev事件，并有效地变成热插设备。
+
+## 针对硬件和系统信息的虚拟文件
+几个虚拟文件系统提供了内核看到的系统内存中的外观。这些文件系统是虚拟的，因为存储设备上不存在真正的文件。相反，虚拟文件系统提供了对内核数据结构和系统硬件的洞察。、
+
+### Sysfs和/sys
+sysfs是一个虚拟文件系统，Linux内核使用它将内核对象的信息导出到用户空间中运行的进程。它是在2.6内核中引入的，最初源自2.4内核中的ramfs。作为虚拟文件系统，sysfs是安装在/ sys上的内存中文件系统。如果在初始化期间没有通过/ etc / fstab中的一个条目装载它，您可以始终使用以下命令装载它:
+```bash
+mount -t sysfs sysfs /sys
+```
+sysfs是一个简单的文件系统，其中包含表示对象属性的文件。对象本身由目录表示。符号链接表示对象之间的关系。sysfs中的顶层目录代表主要子系统。清单1显示了顶层/ sys目录和/ sys / bus和/ sys / devices目录的示例。
+```bash
+[ian@atticf22 ~]$ ls /sys
+block  class  devices   fs          kernel  power
+bus    dev    firmware  hypervisor  module
+[ian@atticf22 ~]$ ls /sys/bus
+acpi         edac          i2c           mipi-dsi     platform  usb
+clockevents  event_source  machinecheck  node         pnp       usb-serial
+clocksource  firewire      mdio_bus      pci          scsi      workqueue
+container    hdaudio       media         pci_express  serio     xen
+cpu          hid           memory        pcmcia       snd_seq   xen-backend
+[ian@atticf22 ~]$ ls /sys/devices/
+breakpoint  ibs_fetch  LNXSYSTM:00  platform  software  tracepoint
+cpu         ibs_op     pci0000:00   pnp0      system    virtual
+```
+如果你看/ sys / block，你会发现你的block设备。在我的例子中，我有三个硬盘——sda、sdb和sdc——和一个CD / DVD驱动器: sr0。这些实际上是指向/ sys / devices目录下目录的链接。如果你遵循这些链接，你会发现sda的分区。查看size文件，您会看到磁盘有2，040，192个扇区，这个值得到了fdisk - l的确认，如清单2所示。
+```bash
+[ian@atticf22 ~]$ ls /sys/block
+sda  sdb  sdc  sr0
+[ian@atticf22 ~]$ ls -l /sys/block
+total 0
+lrwxrwxrwx. 1 root root 0 Sep  9 12:11 sda -> 
+../devices/pci0000:00/0000:00:11.0/ata1/host0/target0:0:0/0:0:0:0/block/sda
+lrwxrwxrwx. 1 root root 0 Sep  9 12:11 sdb -> 
+../devices/pci0000:00/0000:00:11.0/ata2/host1/target1:0:0/1:0:0:0/block/sdb
+lrwxrwxrwx. 1 root root 0 Sep  9 12:11 sdc -> 
+../devices/pci0000:00/0000:00:11.0/ata3/host2/target2:0:0/2:0:0:0/block/sdc
+lrwxrwxrwx. 1 root root 0 Sep 10 20:30 sr0 -> 
+../devices/pci0000:00/0000:00:14.1/ata6/host5/target5:0:0/5:0:0:0/block/sr0
+[ian@atticf22 ~]$ ls /sys/"devices/pci0000:00/0000:00:11.0/ata1/host0/target0:0:0/0:0:0:0/block/sda"
+alignment_offset   events             power      sda10  sda5  slaves
+bdi                events_async       queue      sda11  sda6  stat
+capability         events_poll_msecs  range      sda12  sda7  subsystem
+dev                ext_range          removable  sda2   sda8  trace
+device             holders            ro         sda3   sda9  uevent
+discard_alignment  inflight           sda1       sda4   size
+[ian@atticf22 ~]$ ls /sys/"devices/pci0000:00/0000:00:11.0/ata1/host0/target0:0:0/0:0:0:0/block/sda"/sda1
+alignment_offset  discard_alignment  inflight   power  size   stat       trace
+dev               holders            partition  ro     start  subsystem  uevent
+[ian@atticf22 ~]$ cat \
+> /sys/"devices/pci0000:00/0000:00:11.0/ata1/host0/target0:0:0/0:0:0:0/block/sda"/sda1/size
+2040192
+[ian@atticf22 ~]$ su -
+Password: 
+[root@atticf22 ~]# fdisk -l /dev/sda1
+Disk /dev/sda1: 996.2 MiB, 1044578304 bytes, 2040192 sectors
+ 
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+```
+tree命令是探索/ sys的有用工具。另请注意，您必须用引号或反斜杠( \ )字符来转义特殊字符，如冒号( : )。
+
+### procfs和/proc
+```bash
+[ian@atticf22 ~]$ ls /proc
+1     1274  1891  2155  254   460   559   7651       devices      mtrr
+10    1278  19    2160  255   468   56    768        diskstats    net
+107   1281  1903  2174  256   47    562   7745       dma          pagetypeinfo
+1080  1287  1947  2185  257   48    565   7885       driver       partitions
+1083  13    1951  22    26    488   57    799        execdomains  sched_debug
+11    1326  1952  2243  2604  490   570   8          fb           scsi
+1120  14    1957  2261  2650  495   585   8077       filesystems  self
+1121  15    1959  2264  266   496   588   8159       fs           slabinfo
+1144  1548  1971  2289  27    5     590   8182       interrupts   softirqs
+1181  1557  1990  23    2711  50    599   8189       iomem        stat
+1187  1561  1996  2310  28    51    603   859        ioports      swaps
+1192  1591  1999  2327  285   512   6243  9          irq          sys
+1195  1659  2     2338  286   513   64    940        kallsyms     sysrq-trigger
+1199  1662  20    2341  29    517   66    942        kcore        sysvipc
+12    17    2040  2342  3     518   669   947        keys         thread-self
+1206  1728  2046  24    30    52    67    949        key-users    timer_list
+1226  1734  2052  2438  31    53    68    973        kmsg         timer_stats
+1230  1789  2057  2440  32    539   6896  acpi       kpagecount   tty
+1232  1792  21    2442  33    54    69    asound     kpageflags   uptime
+1243  1796  2111  2444  36    548   7     buddyinfo  loadavg      version
+1246  18    2117  2448  37    549   749   bus        locks        vmallocinfo
+1249  1804  2119  25    375   55    7505  cgroups    mdstat       vmstat
+1254  1808  2122  250   392   551   751   cmdline    meminfo      zoneinfo
+1256  1828  2126  251   407   5525  753   consoles   misc
+1265  1836  2133  252   411   553   759   cpuinfo    modules
+1269  1853  2153  253   459   557   762   crypto     mounts
+```
+
+您会看到大量编号的目录——系统上每个正在运行的进程都有一个目录。数字是进程ID ( PID )。清单4显示了正在运行的bash命令提示符的前几个条目( PID = $ $——当前的PID )。请注意，procfs文件系统中几乎所有条目的长度都为0，即使它们可能不是空的，如果使用cat命令，您也可以看到数据。大多数条目没有以换行符结尾，所以为了清楚起见，我使用清单4中的echo命令。
+
+```bash
+[ian@atticf22 ~]$ ls -l /proc/$$/ | head -n 15
+total 0
+dr-xr-xr-x. 2 ian ian 0 Sep 10 22:44 attr
+-rw-r--r--. 1 ian ian 0 Sep 10 22:44 autogroup
+-r--------. 1 ian ian 0 Sep 10 22:44 auxv
+-r--r--r--. 1 ian ian 0 Sep 10 22:44 cgroup
+--w-------. 1 ian ian 0 Sep 10 22:44 clear_refs
+-r--r--r--. 1 ian ian 0 Sep 10 20:35 cmdline
+-rw-r--r--. 1 ian ian 0 Sep 10 22:44 comm
+-rw-r--r--. 1 ian ian 0 Sep 10 22:44 coredump_filter
+-r--r--r--. 1 ian ian 0 Sep 10 22:44 cpuset
+lrwxrwxrwx. 1 ian ian 0 Sep 10 22:44 cwd -> /home/ian
+-r--------. 1 ian ian 0 Sep 10 22:44 environ
+lrwxrwxrwx. 1 ian ian 0 Sep 10 20:35 exe -> /usr/bin/bash
+dr-x------. 2 ian ian 0 Sep 10 20:08 fd
+dr-x------. 2 ian ian 0 Sep 10 22:44 fdinfo
+bash[ian@atticf22 ~]$ # Now display our command line
+bash[ian@atticf22 ~]$ cat /proc/$$/cmdline;echo ""
+bash
+```
+
+您可以通过在procfs文件系统中设置值来控制的参数也可以通过sysctl命令来控制。有关详细信息，请参阅sysctl和procfs手册页。
+procfs文件系统还提供有关系统使用的中断、直接内存访问( DMA )和I/O端口资源的信息。
+清单5显示了我的系统上的/proc/interracts的内容。使用ISA总线的旧式单处理器计算机用的某些众所周知的中断(或IRQs )、I/O端口和DMA资源。这些设备供应有限，因此添加一个需要IRQ 5的声卡可能会阻止使用同样需要IRQ 5的第二个并行端口。PCI总线包括消息信令中断(MSI)功能，这大大减轻了旧系统中的资源限制。ISA总线设备中断的编号从0到15。这个系统有一个使用IRQ 7的并行打印机端口，但没有串行端口、打印机通常使用IRQ 3或IRQ 4。如果您有错误消息或设备无法工作，并且您怀疑中断冲突，那么查看/proc/interracts是一个好的开始。
+```bash
+[ian@atticf22 ~]$ cat /proc/interrupts 
+           CPU0       CPU1       
+  0:        133          0   IO-APIC-edge      timer
+  1:          0          2   IO-APIC-edge      i8042
+  7:          0          0   IO-APIC-edge      parport0
+  8:          0          1   IO-APIC-edge      rtc0
+  9:          0          0   IO-APIC-fasteoi   acpi
+ 12:          1          4   IO-APIC-edge      i8042
+ 14:          0          0   IO-APIC-edge      pata_atiixp
+ 15:        157     166172   IO-APIC-edge      pata_atiixp
+ 16:        752     764097   IO-APIC  16-fasteoi   ohci_hcd:usb3, ohci_hcd:usb4, snd_hda_intel
+ 17:        125      74351   IO-APIC  17-fasteoi   ehci_hcd:usb1, firewire_ohci
+ 18:          0          3   IO-APIC  18-fasteoi   ohci_hcd:usb5, ohci_hcd:usb6, ohci_hcd:usb7
+ 19:          4       1264   IO-APIC  19-fasteoi   ehci_hcd:usb2, snd_hda_intel
+ 22:        286     186458   IO-APIC  22-fasteoi   0000:00:11.0
+ 27:       1073    1250614   PCI-MSI-edge      enp3s0
+ 28:       7457   10965287   PCI-MSI-edge      nvkm
+ 
+NMI:        850        888   Non-maskable interrupts
+LOC:   25779766   25467714   Local timer interrupts
+SPU:          0          0   Spurious interrupts
+PMI:        850        888   Performance monitoring interrupts
+IWI:          0          2   IRQ work interrupts
+RTR:          0          0   APIC ICR read retries
+RES:   40628246   39894661   Rescheduling interrupts
+CAL:        823        986   Function call interrupts
+TLB:    1972576    2052293   TLB shootdowns
+TRM:          0          0   Thermal event interrupts
+THR:          0          0   Threshold APIC interrupts
+MCE:          0          0   Machine check exceptions
+MCP:        568        568   Machine check polls
+HYP:          0          0   Hypervisor callback interrupts
+ERR:          0
+MIS:          0
+```
+
+
+
+DMA是在ISA总线系统中使用的一种技术，通过这种技术，诸如硬盘驱动器之类的快速设备可以将数据直接传输到计算机存储器，而不需要通过处理器。当数据从设备读取或写入设备时，DMA释放处理器以执行其他工作。PCI总线架构使用总线主控来实现类似的目标。清单6显示了我的系统上/proc/DMA的内容。如果你有ISA总线资源，你通常会看到不止这些，你可能需要这些信息来帮助诊断冲突。
+```bash
+[ian@atticf22 ~]$ cat /proc/dma
+ 4: cascade
+```
+
+解决问题的另一个方法是查看/proc/ioports中的I/O端口列表。ISA总线系统中使用的几个I/O端口是众所周知的，例如通常用于第一个并行端口的范围0378到037 a。请注意，端口是以十六进制指定的。
+```bash
+[ian@atticf22 ~]$ cat /proc/ioports
+0000-0cf7 : PCI Bus 0000:00
+  0000-001f : dma1
+  0020-0021 : pic1
+  0040-0043 : timer0
+  0050-0053 : timer1
+  0060-0060 : keyboard
+  0061-0061 : PNP0800:00
+  0064-0064 : keyboard
+  0070-0071 : rtc0
+  0080-008f : dma page reg
+  00a0-00a1 : pic2
+  00c0-00df : dma2
+  00f0-00ff : PNP0C04:00
+    00f0-00ff : fpu
+  0170-0177 : 0000:00:14.1
+    0170-0177 : pata_atiixp
+  01f0-01f7 : 0000:00:14.1
+    01f0-01f7 : pata_atiixp
+  0230-023f : pnp 00:07
+  0290-029f : pnp 00:07
+  0300-030f : pnp 00:07
+  0376-0376 : 0000:00:14.1
+    0376-0376 : pata_atiixp
+  0378-037a : parport0
+  03c0-03df : vga+
+  03f6-03f6 : 0000:00:14.1
+    03f6-03f6 : pata_atiixp
+  03f8-03ff : serial
+  040b-040b : pnp 00:06
+  04d0-04d1 : pnp 00:06
+  04d6-04d6 : pnp 00:06
+  0800-0803 : ACPI PM1a_EVT_BLK
+  0804-0805 : ACPI PM1a_CNT_BLK
+  0808-080b : ACPI PM_TMR
+  0810-0815 : ACPI CPU throttle
+  0820-0827 : ACPI GPE0_BLK
+  08ff-08ff : ACPI PM2_CNT_BLK
+  0900-090f : pnp 00:06
+  0910-091f : pnp 00:06
+  0a30-0a3f : pnp 00:07
+  0b00-0b3f : pnp 00:06
+    0b20-0b2f : pnp 00:06
+  0c00-0c01 : pnp 00:06
+  0c14-0c14 : pnp 00:06
+  0c50-0c51 : pnp 00:06
+  0c52-0c52 : pnp 00:06
+  0c6c-0c6c : pnp 00:06
+ 
+  0c6f-0c6f : pnp 00:06
+  0cd0-0cd1 : pnp 00:06
+  0cd2-0cd3 : pnp 00:06
+  0cd4-0cd5 : pnp 00:06
+  0cd6-0cd7 : pnp 00:06
+  0cd8-0cdf : pnp 00:06
+0cf8-0cff : PCI conf1
+0d00-ffff : PCI Bus 0000:00
+  8000-800f : 0000:00:11.0
+    8000-800f : ahci
+  9000-9003 : 0000:00:11.0
+    9000-9003 : ahci
+  a000-a007 : 0000:00:11.0
+    a000-a007 : ahci
+  b000-b003 : 0000:00:11.0
+    b000-b003 : ahci
+  c000-c007 : 0000:00:11.0
+    c000-c007 : ahci
+  d000-dfff : PCI Bus 0000:01
+    dc00-dc7f : 0000:01:00.0
+  e000-efff : PCI Bus 0000:03
+    e800-e8ff : 0000:03:00.0
+      e800-e8ff : r8169
+  fe00-fefe : pnp 00:06
+  ff00-ff0f : 0000:00:14.1
+    ff00-ff0f : pata_atiixp
+```
+
+### lsdev命令
+procinfo包中包含了lsdev命令，通过将每个设备的DMA、IRQ和I / O端口信息收集成简单的表格格式，简化了来自/ proc的信息的呈现。清单8显示了我的系统的lsdev输出。
+```bash
+[ian@atticf22 ~]$ lsdev
+Device            DMA   IRQ  I/O Ports
+------------------------------------------------
+0000:00:11.0             22  8000-800f 9000-9003 a000-a007 b000-b003 c000-c007
+0000:00:14.1                 0170-0177 01f0-01f7 0376-0376 03f6-03f6 ff00-ff0f
+0000:01:00.0                 dc00-dc7f
+0000:03:00.0                 e800-e8ff
+acpi                      9 
+ACPI                         0800-0803 0804-0805 0808-080b 0810-0815 0820-0827 08ff-08ff
+ahci                         8000-800f 9000-9003 a000-a007 b000-b003 c000-c007
+cascade             4       
+dma                          0080-008f
+dma1                         0000-001f
+dma2                         00c0-00df
+enp3s0                   27 
+firewire_ohci            17 
+fpu                          00f0-00ff
+i8042                  1 12 
+keyboard                     0060-0060 0064-0064
+nvkm                     28 
+ohci_hcd:usb7            18 
+parport0                  7  0378-037a
+pata_atiixp           14 15  0170-0177 01f0-01f7 0376-0376 03f6-03f6 ff00-ff0f
+PCI                          0000-0cf7 0cf8-0cff 0d00-ffff d000-dfff e000-efff
+pic1                         0020-0021
+pic2                         00a0-00a1
+pnp                          0230-023f 0290-029f 0300-030f 040b-040b 04d0-04d1 04d6-04d6 0900-090f 
+                             0910-091f 0a30-0a3f 0b00-0b3f 0b20-0b2f 0c00-0c01 0c14-0c14 0c50-0c51 
+                             0c52-0c52 0c6c-0c6c 0c6f-0c6f 0cd0-0cd1 0cd2-0cd3 0cd4-0cd5 0cd6-0cd7 
+                             0cd8-0cdf fe00-fefe
+PNP0800:00                   0061-0061
+PNP0C04:00                   00f0-00ff
+r8169                        e800-e8ff
+rtc0                      8  0070-0071
+serial                       03f8-03ff
+snd_hda_intel         16 19 
+timer                     0 
+timer0                       0040-0043
+timer1                       0050-0053
+vga+                         03c0-03df
+```
+
+procinfo包还包含procinfo命令，该命令总结了来自/proc的其他信息。尝试一下，或者查看手册页了解详细信息。
+
+### udev和/udev目录
+udev负责热插拔设备所需的动态设备管理。/dev虚拟文件系统中包含有关已配置和活动设备的信息。当设备被添加到系统或从系统中移除，或者它改变状态时，内核会向管理udev事件的systemd-udevd.service守护程序发送一个事件。守护程序搜索配置的规则以将事件与标识设备的规则匹配。内核通常分配一个既不有意义也不可重复的名称，因此udev通常分配一个更有意义且一致的名称。
+udev规则位于/usr/lib/udev/rules.d中，其他本地规则位于/etc/udev/rules.d中。您可以在易失性/运行/udev/rules.d目录中创建其他规则。你可以使用这个文件来配置udev。注意:有些系统将规则放置在/lib/udev/rules.d中，而不是/usr/lib/udev/rules.d中。请检查系统上的udev手册页。
+/dev文件系统描述了系统上的设备。在一个长列表中，您可以在第一列中找到四个值之一:
+**b**
+表示块设备，如磁盘驱动器
+**c**
+表示字符设备，如终端或打印机，或特殊设备，如null
+**d**
+表示目录
+**l**
+表示指向另一个文件目录的符号链接，在/dev、/proc或/run中
+
+清单9显示了我的系统上/ dev的部分列表，在那里你可以看到每种类型条目的示例。
+
+```bash
+[ian@atticf22 ~]$ ls -l /dev| head -n 60
+total 0
+crw-------. 1 root root     10, 235 Sep  9 12:11 autofs
+drwxr-xr-x. 2 root root         620 Sep 11 06:05 block
+drwxr-xr-x. 2 root root         140 Sep 11 06:05 bsg
+crw-rw----. 1 root disk     10, 234 Sep  9 12:11 btrfs-control
+drwxr-xr-x. 3 root root          60 Sep  9 12:11 bus
+lrwxrwxrwx. 1 root root           3 Sep  9 12:11 cdrom -> sr0
+drwxr-xr-x. 2 root root        3820 Sep 11 09:59 char
+crw-------. 1 root root      5,   1 Sep  9 12:12 console
+lrwxrwxrwx. 1 root root          11 Sep  9 12:11 core -> /proc/kcore
+drwxr-xr-x. 4 root root         100 Sep  9 12:11 cpu
+crw-------. 1 root root     10,  62 Sep  9 12:11 cpu_dma_latency
+drwxr-xr-x. 8 root root         160 Sep 11 06:05 disk
+drwxr-xr-x. 2 root root         100 Sep  9 12:11 dri
+crw-rw----. 1 root video    29,   0 Sep  9 12:11 fb0
+lrwxrwxrwx. 1 root root          13 Sep  9 12:11 fd -> /proc/self/fd
+crw-rw-rw-. 1 root root      1,   7 Sep  9 12:11 full
+crw-rw-rw-. 1 root root     10, 229 Sep  9 14:46 fuse
+crw-------. 1 root root    249,   0 Sep  9 12:11 fw0
+crw-------. 1 root root    250,   0 Sep  9 12:11 hidraw0
+crw-------. 1 root root    250,   1 Sep 11 09:59 hidraw1
+crw-------. 1 root root     10, 228 Sep  9 12:11 hpet
+drwxr-xr-x. 3 root root           0 Sep  9 12:11 hugepages
+crw-------. 1 root root     10, 183 Sep  9 12:11 hwrng
+lrwxrwxrwx. 1 root root          25 Sep  9 12:11 initctl -> /run/systemd/initctl/fifo
+drwxr-xr-x. 4 root root         420 Sep 11 09:59 input
+crw-r--r--. 1 root root      1,  11 Sep  9 12:11 kmsg
+crw-rw-rw-+ 1 root kvm      10, 232 Sep  9 12:11 kvm
+lrwxrwxrwx. 1 root root          28 Sep  9 12:11 log -> /run/systemd/journal/dev-log
+crw-rw----. 1 root disk     10, 237 Sep  9 12:11 loop-control
+crw-rw----. 1 root lp        6,   0 Sep  9 12:11 lp0
+crw-rw----. 1 root lp        6,   1 Sep  9 12:11 lp1
+crw-rw----. 1 root lp        6,   2 Sep  9 12:11 lp2
+crw-rw----. 1 root lp        6,   3 Sep  9 12:11 lp3
+drwxr-xr-x. 2 root root          60 Sep  9 12:11 mapper
+crw-------. 1 root root     10, 227 Sep  9 12:11 mcelog
+crw-------. 1 root root    247,   0 Sep  9 12:11 media0
+crw-r-----. 1 root kmem      1,   1 Sep  9 12:11 mem
+crw-------. 1 root root     10,  59 Sep  9 12:11 memory_bandwidth
+drwxrwxrwt. 2 root root          40 Sep  9 12:11 mqueue
+drwxr-xr-x. 2 root root          60 Sep  9 12:11 net
+crw-------. 1 root root     10,  61 Sep  9 12:11 network_latency
+crw-------. 1 root root     10,  60 Sep  9 12:11 network_throughput
+crw-rw-rw-. 1 root root      1,   3 Sep  9 12:11 null
+crw-------. 1 root root     10, 144 Sep  9 12:11 nvram
+crw-rw-r--. 1 root lp       99,   0 Sep  9 12:11 parport0
+crw-r-----. 1 root kmem      1,   4 Sep  9 12:11 port
+crw-------. 1 root root    108,   0 Sep  9 12:11 ppp
+crw-rw-rw-. 1 root tty       5,   2 Sep 11 10:33 ptmx
+drwxr-xr-x. 2 root root           0 Sep  9 12:11 pts
+crw-rw-rw-. 1 root root      1,   8 Sep  9 12:11 random
+drwxr-xr-x. 2 root root          60 Sep  9 12:11 raw
+crw-rw-r--+ 1 root root     10,  58 Sep  9 14:46 rfkill
+lrwxrwxrwx. 1 root root           4 Sep  9 12:11 rtc -> rtc0
+crw-------. 1 root root    254,   0 Sep  9 12:11 rtc0
+brw-rw----. 1 root disk      8,   0 Sep  9 12:11 sda
+brw-rw----. 1 root disk      8,   1 Sep  9 12:11 sda1
+brw-rw----. 1 root disk      8,  10 Sep  9 12:11 sda10
+brw-rw----. 1 root disk      8,  11 Sep  9 12:11 sda11
+brw-rw----. 1 root disk      8,  12 Sep  9 12:11 sda12
+```
+
+清单10显示了一些内核分配的名称和一些更熟悉的硬盘分区名称之间的联系。
+
+```bash
+[ian@atticf22 ~]$ ls -l /dev/block/8\:?
+lrwxrwxrwx. 1 root root 6 Sep  9 12:11 /dev/block/8:0 -> ../sda
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:1 -> ../sda1
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:2 -> ../sda2
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:3 -> ../sda3
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:4 -> ../sda4
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:5 -> ../sda5
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:6 -> ../sda6
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:7 -> ../sda7
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:8 -> ../sda8
+lrwxrwxrwx. 1 root root 7 Sep  9 12:11 /dev/block/8:9 -> ../sda9
+[
+```
+
+如果要管理或监视udev事件，可以使用udevadm命令。有关详细信息，请参见手册页。
+
+## 工具和实例
+一些有用的工具可用于确定有关PCI和USB设备的信息。让我们看看lsci和lssb。
+
+### PCI和lspci
+使用没有不带参数的lspici查看PCI设备的基本列表。你看到的取决于你自己的系统硬件。清单11显示了我在本教程的大部分时间里一直使用的Fedora 22桌面系统。
+```bash
+[ian@atticf22 ~]$ # Fedora 22
+[ian@atticf22 ~]$ lspci
+00:00.0 Host bridge: Advanced Micro Devices, Inc. [AMD] RS780 Host Bridge
+00:02.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] RS780 PCI to PCI bridge (ext gfx port 0)
+00:05.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] RS780/RS880 PCI to PCI bridge (PCIE port 1)
+00:06.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] RS780 PCI to PCI bridge (PCIE port 2)
+00:11.0 SATA controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 SATA Controller 
+        [IDE mode]
+00:12.0 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 USB OHCI0 Controller
+00:12.1 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0 USB OHCI1 Controller
+00:12.2 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 USB EHCI Controller
+00:13.0 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 USB OHCI0 Controller
+00:13.1 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0 USB OHCI1 Controller
+00:13.2 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 USB EHCI Controller
+00:14.0 SMBus: Advanced Micro Devices, Inc. [AMD/ATI] SBx00 SMBus Controller (rev 3a)
+00:14.1 IDE interface: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 IDE Controller
+00:14.2 Audio device: Advanced Micro Devices, Inc. [AMD/ATI] SBx00 Azalia (Intel HDA)
+00:14.3 ISA bridge: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 LPC host controller
+00:14.4 PCI bridge: Advanced Micro Devices, Inc. [AMD/ATI] SBx00 PCI to PCI Bridge
+00:14.5 USB controller: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 USB OHCI2 Controller
+00:18.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Family 10h Processor HyperTransport 
+        Configuration
+00:18.1 Host bridge: Advanced Micro Devices, Inc. [AMD] Family 10h Processor Address Map
+00:18.2 Host bridge: Advanced Micro Devices, Inc. [AMD] Family 10h Processor DRAM Controller
+00:18.3 Host bridge: Advanced Micro Devices, Inc. [AMD] Family 10h Processor Miscellaneous Control
+00:18.4 Host bridge: Advanced Micro Devices, Inc. [AMD] Family 10h Processor Link Control
+01:00.0 VGA compatible controller: NVIDIA Corporation GF119 [GeForce GT 610] (rev a1)
+01:00.1 Audio device: NVIDIA Corporation GF119 HDMI Audio Controller (rev a1)
+02:00.0 FireWire (IEEE 1394): JMicron Technology Corp. IEEE 1394 Host Controller
+03:00.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL8111/8168/8411 PCI Express Gigabit 
+        Ethernet Controller (rev 02)
+```
+
+下表展示了搭载ubuntu15.04的lenovo yoga book笔记本上的结果
+```bash
+ian@ubuntu:~$ # Ubuntu 15.04
+ian@ubuntu:~$ lspci
+00:00.0 Host bridge: Intel Corporation Haswell-ULT DRAM Controller (rev 09)
+00:02.0 VGA compatible controller: Intel Corporation Haswell-ULT Integrated Graphics Controller (rev 09)
+00:03.0 Audio device: Intel Corporation Haswell-ULT HD Audio Controller (rev 09)
+00:04.0 Signal processing controller: Intel Corporation Device 0a03 (rev 09)
+00:14.0 USB controller: Intel Corporation 8 Series USB xHCI HC (rev 04)
+00:16.0 Communication controller: Intel Corporation 8 Series HECI #0 (rev 04)
+00:1b.0 Audio device: Intel Corporation 8 Series HD Audio Controller (rev 04)
+00:1c.0 PCI bridge: Intel Corporation 8 Series PCI Express Root Port 1 (rev e4)
+00:1d.0 USB controller: Intel Corporation 8 Series USB EHCI #1 (rev 04)
+00:1f.0 ISA bridge: Intel Corporation 8 Series LPC Controller (rev 04)
+00:1f.2 SATA controller: Intel Corporation 8 Series SATA Controller 1 [AHCI mode] (rev 04)
+00:1f.3 SMBus: Intel Corporation 8 Series SMBus Controller (rev 04)
+00:1f.6 Signal processing controller: Intel Corporation 8 Series Thermal (rev 04)
+01:00.0 Network controller: Intel Corporation Wireless 7260 (rev 6b)
+```
+
+lsci命令在/usr/share/hwdata/PCI.IDs文件中查找其大部分数据，该文件包含所有已知IDs(供应商、设备、类和子类)的列表。供应商和设备代码被分配了号码。如果要查看数字而不是名称，请使用-n选项。如果您的本地数据库中还没有新设备，请使用-q选项使用DNS查找查询中央PCI ID服务器数据库。如果在那里发现设备，信息会保存在～/.pcids-cache，即使您没有指定- q，设备在以后的运行中也会被识别。
+PCI拓扑由四个层次描述:域、总线、插槽和功能。您可以将这些组件中的任何一个与-s选项一起使用来限制输出。-t选项以树形视图显示输出。lspici的其他选项控制输出的详细程度和格式。您可以有或多或少的详细输出，并且输出可以适合于机器或人类阅读。
+带上-t以及-v参数的输出结果如下
+```bash
+[ian@atticf22 ~]$ lspci -tvv -s \:00
+-+-[0000:03]---00.0  Realtek Semiconductor Co., Ltd. RTL8111/8168/8411 PCI Express Gigabit Ethernet
+                     Controller
+ +-[0000:02]---00.0  JMicron Technology Corp. IEEE 1394 Host Controller
+ +-[0000:01]-+-00.0  NVIDIA Corporation GF119 [GeForce GT 610]
+ |           \-00.1  NVIDIA Corporation GF119 HDMI Audio Controller
+ \-[0000:00]---00.0  Advanced Micro Devices, Inc. [AMD] RS780 Host Bridge
+```
+
+您也可以使用- d选项按供应商ID、设备或类限制输出。-k选项告诉你哪个内核驱动程序正在处理这个设备，以及哪个内核模块能够处理它。清单14显示了我的系统上NVIDIA图形和声音设备的输出。NVIDIA的供应商ID为10de，您可以使用lspici的-nn选项来查找。
+```bash
+[ian@atticf22 ~]$ lspci -d 10de\:
+01:00.0 VGA compatible controller: NVIDIA Corporation GF119 [GeForce GT 610] (rev a1)
+01:00.1 Audio device: NVIDIA Corporation GF119 HDMI Audio Controller (rev a1)
+[ian@atticf22 ~]$ lspci -d 10de\: -k
+01:00.0 VGA compatible controller: NVIDIA Corporation GF119 [GeForce GT 610] (rev a1)
+    Subsystem: ASUSTeK Computer Inc. Device 8496
+    Kernel driver in use: nouveau
+    Kernel modules: nouveau
+01:00.1 Audio device: NVIDIA Corporation GF119 HDMI Audio Controller (rev a1)
+    Subsystem: ASUSTeK Computer Inc. Device 8496
+    Kernel driver in use: snd_hda_intel
+    Kernel modules: snd_hda_intel
+```
+
+有关lspici的许多其他选项，请参见手册页（man）。其中一些可以让您访问PCI设备的详细信息。还有一个setpci命令，允许根用户查询和配置PCI设备。再次，请参见手册页了解详细信息。
+
+### USB和lsusb
+使用lsusb命令显示有关您的USB设备的信息。与lspici一样，如清单15所示，-t选项以树形布局显示信息。
+```bash
+[root@atticf22 ~]# lsusb -t
+/:  Bus 07.Port 1: Dev 1, Class=root_hub, Driver=ohci-pci/2p, 12M
+/:  Bus 06.Port 1: Dev 1, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 05.Port 1: Dev 1, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 04.Port 1: Dev 1, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 03.Port 1: Dev 1, Class=root_hub, Driver=ohci-pci/3p, 12M
+    |__ Port 1: Dev 2, If 0, Class=Hub, Driver=hub/4p, 12M
+        |__ Port 1: Dev 3, If 0, Class=Human Interface Device, Driver=usbhid, 1.5M
+        |__ Port 4: Dev 15, If 0, Class=Human Interface Device, Driver=usbhid, 1.5M
+/:  Bus 02.Port 1: Dev 1, Class=root_hub, Driver=ehci-pci/6p, 480M
+/:  Bus 01.Port 1: Dev 1, Class=root_hub, Driver=ehci-pci/6p, 480M
+    |__ Port 5: Dev 7, If 0, Class=Hub, Driver=hub/4p, 480M
+        |__ Port 2: Dev 13, If 0, Class=Mass Storage, Driver=usb-storage, 480M
+    |__ Port 6: Dev 4, If 0, Class=Video, Driver=uvcvideo, 480M
+    |__ Port 6: Dev 4, If 1, Class=Video, Driver=uvcvideo, 480M
+    |__ Port 6: Dev 4, If 2, Class=Audio, Driver=snd-usb-audio, 480M
+    |__ Port 6: Dev 4, If 3, Class=Audio, Driver=snd-usb-audio, 480M
+```
+
+USB设备连接到集线器。根集线器位于顶层，可以支持USBc 1、2或3。OHCI (或UHCI )驱动程序支持USB 1.1(12兆位/秒)，EHCI驱动程序支持USB 2.0(480兆位/秒)，XHCI驱动程序支持USB 3.0(5兆位/秒)。USB连接SCSI(UAS)是为USB3.0开发的更快的协议，也支持USB 2.0速度。UAS是在内核3.15引入Linux的。
+连接到电脑上的USB设备有有以下几种类型:
+
+- 人机交互设备包括键盘、鼠标和其他类似设备。
+- 通信设备包括调制解调器和串行、以太网或WiFi接口。
+- 大容量存储设备包括硬盘、CD和DVD驱动器、闪存驱动器、存储卡读取器和照相机。
+- 音频设备包括声卡、MIDI设备、扬声器和麦克风。
+- IrDA设备使用红外通信，包括医疗设备和测试设备。
+- 打印机设备包括打印机和其他设备，如数控机器。
+- 视频设备包括网络摄像头。
+
+许多连接的设备使用类驱动程序，例如存储设备的USB存储、鼠标或键盘等人机界面设备的usbhid，或者级联集线器的集线器。清单15中的列表包括两个人机界面设备(我的鼠标和键盘)和一个带有附加存储设备(拇指驱动器)的USB 2.0集线器。某些专用设备可能需要该设备的唯一驱动程序。
+与PCI设备一样，您可以通过USB拓扑或供应商或设备ID来限制输出。清单16展示了每一个例子。
+```bash
+[ian@atticf22 ~]$ lsusb -d 046d:
+Bus 001 Device 004: ID 046d:081b Logitech, Inc. Webcam C310
+Bus 003 Device 015: ID 046d:c50e Logitech, Inc. Cordless Mouse Receiver
+[ian@atticf22 ~]$ lsusb -s 01:
+Bus 001 Device 004: ID 046d:081b Logitech, Inc. Webcam C310
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+```
+
+还有一个usbview命令，你可以用它来图形化地查看USB信息。数据显示在左窗格的树形视图中。选择条目会在右窗格中显示详细信息。图8中的示例显示了USB驱动器的细节。
+
+## 消息传递和D-Bus
+当插入新硬件，或者打印机用光纸张时，用户通常需要得到通知。d-Bus(也称为dbus)是在freedesktop.org主持下开发的消息传递总线。一个单一的系统守护程序允许内核和用户空间之间进行通信，以处理新发现的硬件等事件。d-Bus消息可以向用户发送通知，然后接收应用程序可以建议一些操作，例如当CD或DVD插入驱动器或者USB拇指驱动器插入时打开文件浏览器。
+还有一个在登录时启动的每个用户会话守护进程。用户守护程序提供用户应用程序之间的进程间通信。D-Bus协议是一个通用的一对一消息传递框架。两个应用程序甚至可以使用框架进行通信，而无需消息通过dbus守护程序。
+
+## 内核模块
+很久以前，计算机操作系统被配置和构建为处理一组特定的附加硬件。如果设备没有内置在操作系统内核中，则无法添加或使用。随着设备种类的增加以及通过热插拔动态添加设备的需求的增长，这种模式不再有效。如今，内核很少，设备支持由可加载内核模块(LKMs)配置。一组基本的设备支持模块通常包含在初始RAM磁盘中，作为引导过程的一部分加载。一旦系统启动，内核会进一步探测系统，并在发现新设备时加载所需的设备模块。
+几个命令用于询问和操作内核模块。我将在这里介绍lsmod、modinfo和modprobe。modprobe命令现在已经取代了早期的insmod和rmmod命令的功能，因为它更强大。
+
+### 使用lsmod
+lsmod命令格式化来自/ proc/modules的信息，以提供Linux系统中模块的当前状态。lsmod命令没有选项。清单17显示了我的系统上模块状态的部分列表。
+```bash
+[ian@atticf22 ~]$ lsmod 
+Module                  Size  Used by
+vfat                   24576  1
+fat                    69632  1 vfat
+uas                    24576  0
+usb_storage            65536  2 uas
+xt_CHECKSUM            16384  1
+ipt_MASQUERADE         16384  3
+nf_nat_masquerade_ipv4    16384  1 ipt_MASQUERADE
+nf_conntrack_netbios_ns    16384  0
+nf_conntrack_broadcast    16384  1 nf_conntrack_netbios_ns
+ip6t_rpfilter          16384  1
+ip6t_REJECT            16384  2
+nf_reject_ipv6         16384  1 ip6t_REJECT
+xt_conntrack           16384  22
+ebtable_nat            16384  1
+ebtable_broute         16384  1
+ebtable_filter         16384  1
+ebtables               32768  3 ebtable_broute,ebtable_nat,ebtable_filter
+ip6table_nat           16384  1
+nf_conntrack_ipv6      20480  12
+nf_defrag_ipv6         36864  1 nf_conntrack_ipv6
+nf_nat_ipv6            16384  1 ip6table_nat
+ip6table_mangle        16384  1
+ip6table_security      16384  1
+ip6table_raw           16384  1
+ip6table_filter        16384  1
+ip6_tables             28672  5 ip6table_filter,ip6table_mangle,ip6table_security,ip6table_nat,
+                                ip6table_raw
+iptable_nat            16384  1
+nf_conntrack_ipv4      16384  12
+nf_defrag_ipv4         16384  1 nf_conntrack_ipv4
+nf_nat_ipv4            16384  1 iptable_nat
+nf_nat                 28672  3 nf_nat_ipv4,nf_nat_ipv6,nf_nat_masquerade_ipv4
+nf_conntrack          106496  9 nf_conntrack_netbios_ns,nf_nat,nf_nat_ipv4,nf_nat_ipv6,xt_conntrack,
+                                nf_nat_masquerade_ipv4,nf_conntrack_broadcast,nf_conntrack_ipv4,
+                                nf_conntrack_ipv6
+iptable_mangle         16384  1
+iptable_security       16384  1
+iptable_raw            16384  1
+bnep                   24576  2
+bluetooth             491520  5 bnep
+rfkill                 24576  2 bluetooth
+fuse                   94208  3
+tun                    28672  1
+bridge                114688  1 ebtable_broute
+ppdev                  20480  0
+uvcvideo               90112  0
+kvm_amd                65536  0
+kvm                   495616  1 kvm_amd
+videobuf2_vmalloc      16384  1 uvcvideo
+videobuf2_core         49152  1 uvcvideo
+videobuf2_memops       16384  1 videobuf2_vmalloc
+v4l2_common            16384  1 videobuf2_core
+videodev              159744  3 uvcvideo,v4l2_common,videobuf2_core
+media                  24576  2 uvcvideo,videodev
+snd_usb_audio         180224  3
+k10temp                16384  0
+btrfs                 974848  0
+edac_core              53248  0
+```
+
+### 使用modinfo
+使用modinfo命令获取有关模块的信息。您可以提供完整的文件名或仅提供模块名称。清单18显示了vfat模块的信息，该模块处理各种形式的FAT格式驱动器。
+```bash
+[ian@atticf22 ~]$ modinfo vfat
+filename:       /lib/modules/4.1.6-200.fc22.x86_64/kernel/fs/fat/vfat.ko.xz
+author:         Gordon Chaffee
+description:    VFAT filesystem support
+license:        GPL
+alias:          fs-vfat
+depends:        fat
+intree:         Y
+vermagic:       4.1.6-200.fc22.x86_64 SMP mod_unload 
+signer:         Fedora kernel signing key
+sig_key:        95:D8:8B:1A:62:3B:BF:DF:EF:E2:58:6B:05:ED:0A:C5:C2:88:C1:3A
+sig_hashalgo:   sha256
+```
+模块信息包括文件的完整路径以及模块可能知道的任何其他名称(别名)的信息。还会列出依赖项(如果有的话)。因此，从清单18中，您可以看到vfat模块也称为fs-vfat，并且依赖于另一个称为fat的模块。尝试使用这些模块名称运行modinfo。
+您可以使用-F或-field选项将输出限制为特定字段。此选项对脚本很有用。
+如果没有指定完整的文件名，modinfo会在/lib/modules/version/kernel中搜索一个模块，其中version是uname -r给出的内核版本。在清单18的示例中，文件vfat.ko.xz(vfat内核模块)位于/lib/modules/4.1.6-200.fc22.x86_64/kerene/fs/fat中。清单19说明了如何开始在系统上查找模块文件。
+```bash
+[ian@atticf22 ~]$ uname -r
+4.1.6-200.fc22.x86_64
+[ian@atticf22 ~]$ ls /lib/modules/$(uname -r)
+build                modules.dep          modules.softdep
+kernel               modules.dep.bin      modules.symbols
+modules.alias        modules.devname      modules.symbols.bin
+modules.alias.bin    modules.drm          source
+modules.block        modules.modesetting  updates
+modules.builtin      modules.networking   vdso
+modules.builtin.bin  modules.order
+[ian@atticf22 ~]$ ls /lib/modules/$(uname -r)/kernel
+arch  crypto  drivers  fs  kernel  lib  mm  net  security  sound
+```
+
+### 使用modprobe
+正如您从lspci、lsusb、lsmod和modinfo的输出中看到的，您的系统使用几个内核模块来驱动设备。您还看到这些模块中的一些模块具有依赖性。因此，按照正确的顺序加载正确的模块是很重要的。幸运的是，modprobe命令已经取代了insmod和rmmod早期的手工工作，这两个模块都可以从系统中插入或移除一个模块。
+我将在我的Ubuntu 16.04.1 LTS系统上使用irnet模块作为例子。使用modinfo查看更多关于这个模块的信息，如清单21所示。
+```bash
+ian@ubuntu:~$ modinfo irnet
+ian@attic-u16:~$ modinfo irnet
+filename:       /lib/modules/4.4.0-59-generic/kernel/net/irda/irnet/irnet.ko
+alias:          char-major-10-187
+license:        GPL
+description:    IrNET : Synchronous PPP over IrDA
+author:         Jean Tourrilhes <jt@hpl.hp.com>
+srcversion:     2883ED607A4D54A94830F37
+depends:        irda
+intree:         Y
+vermagic:       4.4.0-59-generic SMP mod_unload modversions 
+ian@attic-u16:~$ modinfo -F depends irda
+crc-ccitt
+```
+
+正如你所看到的，这个模块依赖于irda，它还依赖于crc - ccitt。通过使用grep在modules.dep文件中搜索irda或crc - ccitt，您可以看到模块化驱动程序支持的参数值。这些驱动程序中的每一个都被许多其他驱动程序使用。
+如果要手动加载或卸载驱动程序，请使用带有-a(或-all)选项的modprobe来加载或插入模块，使用-r选项来移除或卸载模块。-n、-dry -run或-show选项向你展示了不用做就能做什么。您通常将- v选项与这些一起使用，以查看更多信息。清单22显示了如果我尝试加载irda模块会发生什么。
+```bash
+ian@attic-u16:~$ modprobe -nav irnet
+insmod /lib/modules/4.4.0-59-generic/kernel/lib/crc-ccitt.ko 
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irda.ko 
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irnet/irnet.ko
+```
+输出显示了加载每个所需模块所需的insmod命令，并解决了依赖关系。
+modprobe命令会考虑已经加载的模块。在清单23中，我首先加载crc-ccitt模块，然后进行另一次试运行，最后加载irnet模块。请注意，实际加载或卸载需要root权限。
+```bash
+ian@attic-u16:~$ sudo modprobe -av crc-ccitt
+insmod /lib/modules/4.4.0-59-generic/kernel/lib/crc-ccitt.ko 
+ian@attic-u16:~$ modprobe -nav irnet
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irda.ko 
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irnet/irnet.ko 
+ian@attic-u16:~$ sudo modprobe -av irnet
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irda.ko 
+insmod /lib/modules/4.4.0-59-generic/kernel/net/irda/irnet/irnet.ko 
+ian@attic-u16:~$ lsmod | grep "ir[dn]\|ccitt"
+irnet                  24576  0
+irda                  196608  1 irnet
+crc_ccitt              16384  1 irda
+```
+您可以使用modprobe的- r选项移除模块。如果模块正在使用，则不能将其删除。清单24展示了一些例子。
+```bash
+ian@attic-u16:~$ modprobe -nvr crc-ccitt
+modprobe: FATAL: Module crc_ccitt is in use.
+ian@attic-u16:~$ modprobe -nvr irnet
+rmmod irnet
+ian@attic-u16:~$ sudo modprobe -vr crc-ccitt
+modprobe: FATAL: Module crc_ccitt is in use.
+ian@attic-u16:~$ sudo modprobe -vr irnet
+rmmod irnet
+rmmod irda
+rmmod crc_ccitt
+```
+
+### 模块参数
+一些模块有参数。例如，设备驱动程序可能需要知道使用哪个IRQ或I / O端口。清单25显示了nsc-ircc模块的模块信息，该模块具有几个这样的参数。
+```bash
+ian@attic-u16:~$ modinfo nsc-ircc
+filename:       /lib/modules/4.4.0-59-generic/kernel/drivers/net/irda/nsc-ircc.ko
+license:        GPL
+description:    NSC IrDA Device Driver
+author:         Dag Brattli <dagb@cs.uit.no>
+srcversion:     9AA374A6DFC1C886D632DC3
+alias:          acpi*:IBM0071:*
+alias:          pnp:dIBM0071*
+alias:          acpi*:HWPC224:*
+alias:          pnp:dHWPC224*
+alias:          acpi*:NSC6001:*
+alias:          pnp:dNSC6001*
+depends:        irda
+intree:         Y
+vermagic:       4.4.0-59-generic SMP mod_unload modversions 
+parm:           qos_mtt_bits:Minimum Turn Time (int)
+parm:           io:Base I/O addresses (array of int)
+parm:           irq:IRQ lines (array of int)
+parm:           dma:DMA channels (array of int)
+parm:           dongle_id:Type-id of used dongle (int)
+```
+加载模块时，可以在modprobe命令行中指定模块参数。有关更多详细信息以及其他可用modprobe选项的详细信息，请参见手册页。
+
+
+  [1]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/bios-main.jpg
+  [2]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/bios-onboard.jpg
+  [3]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/bios-boot.jpg
+  [4]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/bios-boot-priority.jpg
+  [5]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/uefi-main.jpg
+  [6]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/uefi-bootmode.jpg
+  [7]: https://www.ibm.com/developerworks/library/l-lpic1-101-1/uefi-security.jpg
