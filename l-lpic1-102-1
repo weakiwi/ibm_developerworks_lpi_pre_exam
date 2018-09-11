@@ -1,0 +1,417 @@
+# Learn linux, 101, 硬盘布局
+
+标签（空格分隔）： lpi-pre-exam 翻译
+---
+
+## 概览
+在本教程中，学习如何为Linux系统设计磁盘分区布局。 可以学到：
+
+- 将文件系统和交换空间分配给单独的分区或磁盘
+- 根据系统的预期用途定制设计
+- 确保系统可以启动
+- 了解逻辑卷管理器（LVM）的基本功能
+
+## Linux文件系统
+Linux文件系统包含排列在磁盘或目录中的其他块存储设备上的文件。 与许多其他系统一样，Linux系统上的目录可以包含称为子目录的其他目录。 与Microsoft®Windows®之类的系统不同，在不同的驱动器号（A：，C：等等）上具有单独文件系统的概念，Linux文件系统是单个树，其中/ directory作为其根目录。
+本教程可帮助您为Linux Server Professional（LPIC-1）考试101的主题102中的目标102.1做准备。目标的权重为2。
+注意：本教程主要涉及规划布局。 有关实现步骤，请参阅主题104的教程（在我们的系列路线图中描述）。
+
+## 前置条件
+要从本系列教程中获得最大收益，您应该具备Linux的基本知识和可以在其上练习本教程中涵盖的命令的Linux系统。 有时程序的不同版本会以不同的方式格式化输出，因此您的结果可能并不总是与此处显示的列表和数字完全相同。
+
+## 使用mount命令
+如果文件系统只是一棵大树，您可能想知道为什么磁盘布局很重要。那么，真正发生的是每个块设备，例如硬盘驱动器分区，CD-ROM或软盘，实际上都有一个文件系统。通过将文件系统挂在在名为挂载点的点上的不同设备上，可以创建文件系统的单个树视图。
+
+通常，内核通过将文件系统挂载到某个硬盘驱动器分区上作为根分区来启动整个挂载过程。您可以将其他硬盘驱动器分区安装为/boot，/tmp或/home。例如，您可以将文件系统作为/mnt/floppy的挂载点挂载软盘驱动器，将CD-ROM上的文件系统挂在到/media/ cdrom1。您还可以使用网络文件系统（如NFS）从其他系统挂载文件。虽然挂载过程实际上将文件系统安装在某些设备上，但通常只是说您“挂载设备”，这被理解为“将文件系统安装在设备上”。
+
+现在，假设您刚刚挂载了根文件系统（/），并且想要在挂载点/media/cdrom上挂载CD-ROM /dev/sr0。在将CD-ROM安装到其上之前，必须存在安装点。安装CD-ROM时，CD-ROM上的文件和子目录将成为/ media/cdrom中和下面的文件和子目录。已经在/media/cdrom中的任何文件或子目录都不再可见，尽管它们仍然存在于包含挂载点/media/cdrom的块设备上。如果卸载了CD-ROM，则原始文件和子目录将再次可见。您应该避免此问题，方法是不将其他文件放在用作挂载点的目录中。
+
+表1显示了文件系统层次结构标准中所需的目录（有关FHS的更多详细信息，请参阅参考资料）。
+| 目录        | 描述   |  
+| --------   | -----  |
+| bin     | 基本命令二进制文件|   
+| boot       | 引导加载程序的静态文件   |  
+| dev      | 设备文件| 
+|etc|主机特定的配置文件|
+|lib|基本共享库和内核模块|
+|media|可移除设备(removable media)挂载点|
+|mnt|临时安装文件系统的挂载点|
+|opt|附加应用程序软件包|
+|sbin|基本系统二进制文件|
+|srv|该系统提供的服务数据|
+|tmp|临时文件|
+|usr|二级层次结构|
+|var|可变数据|
+
+## 分区
+第一个SCSI驱动器通常是/dev/sda。 在较旧的Linux系统上，第一个IDE硬盘驱动器是/dev/hda。 随着串行连接（SATA）IDE驱动器的出现，混合PATA / SATA系统有时会将/ dev / hda用于第一个PATA驱动器，将/dev/sda用于第一个SATA驱动器。 在较新的系统上，所有IDE驱动器都命名为/dev/sda，/dev/sdb，依此类推。 IDE驱动器名称的更改是hotplug系统的结果，该系统最初支持USB驱动器。 Hotplug允许您插入新设备并立即使用它们，现在可用于所有设备，无论它们是内置于系统中还是稍后使用USB或Firewire（IEEE 1394）或其他类型的连接插入正在运行的系统。
+
+### MBR分区
+传统上，硬盘驱动器被格式化为512字节扇区。磁盘盘片上可以在不移动磁头的情况下读取的所有扇区构成轨道。磁盘通常有一个以上的盘片。可以在不移动头部的情况下读取的各种盘片上的轨道集合称为圆柱体。硬盘驱动器的几何形状用圆柱体，每个圆柱体的轨道（或磁头）和扇区/轨道表示。在撰写本文时，驱动器制造商开始推出具有4K扇区的磁盘。如果文件系统仍假定为512字节扇区，则如果分区不在4K边界的扇区上启动，则可能会丢失性能。
+
+对PC系统上DOS操作系统，磁头和扇区的可能大小的限制导致BIOS转换几何值，以便可以支持更大的硬盘驱动器。最终，即使这些方法也不够。磁盘驱动器技术的最新发展到了逻辑块寻址（LBA），因此CHS几何测量不太重要，并且现代磁盘上报告的几何与真实物理扇区布局几乎没有关系。目前使用的较大磁盘强制扩展到LBA，称为LBA48，为扇区号保留最多48位。一种称为GUID分区表（GPT）的新格式现在用于更大的驱动器而不是MBR格式。默认情况下，GPT驱动器最多支持128个分区。
+
+硬盘驱动器上的空间被划分（或分区）为分区。分区不能重叠;未分配给分区的空间称为空闲空间。分区的名称类似于/dev/hda1，/dev/hda2，/dev/hda3，/dev/sda1等。在不使用IDE驱动器的热插拔支持的系统上，IDE驱动器限制为63个分区。热插拔支持的SCSI驱动器，USB驱动器和IDE驱动器限制为15个分区。用于分配为整数个柱面的分区（基于可能不准确的圆柱体概念）。例如parted的-C选项，其指定新分区的分配应该在边界上。
+
+您可以使用fdisk或parted命令在MBR磁盘上显示分区信息。这两个命令都可以交互操作，或者您可以在命令行上传递参数。您可以使用其中一个的-v参数来显示有关程序版本的信息。两者都支持几个不同的单元来显示和分配分区。清单1显示了使用带参数的fdisk并以交互方式分开以使用扇区作为单位显示MBR格式磁盘上的分区的示例。您将需要通过sudo root或具有root权限，如此处所示，以显示或操作分区表。
+
+注意：在您选择将更新写入磁盘之前，所有这些分区工具都将保留内存中的更改。如果有疑问，请退出：如果您不知道自己在做什么或者出错，可能会使您的磁盘或系统无法使用。
+```shell
+[ian@atticf20 ~]$ fdisk -v
+fdisk from util-linux 2.26.2
+[ian@atticf20 ~]$ fdisk -l /dev/sdb
+fdisk: cannot open /dev/sdb: Permission denied
+[ian@atticf20 ~]$ sudo fdisk -l /dev/sdb
+[sudo] password for ian: 
+Disk /dev/sdb: 232.9 GiB, 250059350016 bytes, 488397168 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x000404d6
+ 
+Device     Boot     Start       End   Sectors   Size Id Type
+/dev/sdb1              63    401624    401562 196.1M 83 Linux
+/dev/sdb2          401625 252786687 252385063 120.4G 83 Linux
+/dev/sdb3       252786688 375631871 122845184  58.6G 83 Linux
+/dev/sdb4       375647895 488392064 112744170  53.8G 83 Linux
+[ian@atticf20 ~]$ sudo parted /dev/sdb
+GNU Parted 3.2
+Using /dev/sdb
+Welcome to GNU Parted! Type 'help' to view a list of commands.
+(parted) help u
+  unit UNIT                                set the default unit to UNIT
+ 
+    UNIT is one of: s, B, kB, MB, GB, TB, compact, cyl, chs, %, kiB, MiB,
+        GiB, TiB
+(parted) u s
+(parted) p         
+Model: ATA HDT722525DLA380 (scsi)
+Disk /dev/sdb: 488397168s
+Sector size (logical/physical): 512B/512B
+Partition Table     : msdos
+Disk Flags: 
+ 
+Number  Start       End         Size        Type     File system  Flags
+ 1      63s         401624s     401562s     primary  ext3
+ 2      401625s     252786687s  252385063s  primary  ext4
+ 3      252786688s  375631871s  122845184s  primary  ext3
+ 4      375647895s  488392064s  112744170s  primary  ext4
+ 
+(parted) q
+```
+请注意，扇区大小既是逻辑的，也是物理的。自2009年底以来，硬盘驱动器公司已开始向磁盘上的较大的部分迁移。这些较大的扇区提供了改进的性能和更好的容错能力，使用这些较大4K扇区的磁盘被IDEMA（国际磁盘驱动器设备和材料协会）称为高级格式。有关更多信息，请参阅参考资料由于大多数操作系统需要512字节扇区，因此高级格式驱动器提供512字节扇区。如果分区在4096的倍数（扇区0,8,16等）的逻辑扇区上开始，则性能通常会得到改善。
+
+您可以使用parted或fdisk在Linux系统上查看信息。较旧的Linux系统还在/ proc文件系统中报告了规格，例如/proc/ide /hda/geometry这样的文件，这个文件可能不存在于较新的系统上。
+
+如果两个不同的分区程序对标称磁盘几何结构有不同的理解，则一个分区程序可能会报告由另一个分区程序创建的分区的错误或可能的问题。如果将磁盘从一个系统移动到另一个系统，您可能也会看到此类问题，尤其是在BIOS功能不同的情况下。
+
+您可以使用fdisk在柱面中显示单位，使用-u = cylinders选项，或者可以在交互模式下使用u子命令在扇区和柱面之间切换。 fdisk的最新版本将告诉您现在不推荐使用柱面单元。 parted命令支持几个不同的单元。清单2使用fdisk显示了柱面中的分区信息，并为清单1中使用的相同磁盘分区。我们还使用parted中可用的chs（柱面，磁头，扇区）单元来说明更多细节。在本例中，我们将以交互方式使用fdisk，并向您展示如何在命令行中输入parted子命令字符串。
+```shell
+[ian@atticf20 ~]$ sudo fdisk /dev/sdb
+ 
+Welcome to fdisk (util-linux 2.26.2).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+ 
+ 
+Command (m for help): u
+Changing display/entry units to cylinders (DEPRECATED!).
+ 
+Command (m for help): p
+Disk /dev/sdb: 232.9 GiB, 250059350016 bytes, 488397168 sectors
+Geometry: 255 heads, 63 sectors/track, 30401 cylinders
+Units: cylinders of 16065 * 512 = 8225280 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x000404d6
+ 
+Device     Boot Start   End Cylinders   Size Id Type
+/dev/sdb1           1    25        25 196.1M 83 Linux
+/dev/sdb2          26 15736     15711 120.4G 83 Linux
+/dev/sdb3       15736 23383      7647  58.6G 83 Linux
+/dev/sdb4       23384 30401      7019  53.8G 83 Linux
+ 
+Command (m for help): q
+ 
+[ian@atticf20 ~]$ sudo parted  /dev/sdb u cyl p u chs p
+Model: ATA HDT722525DLA380 (scsi)
+Disk /dev/sdb: 30401cyl
+Sector size (logical/physical): 512B/512B
+BIOS cylinder,head,sector geometry: 30401,255,63.  Each cylinder is 8225kB.
+Partition Table   : msdos
+Disk Flags: 
+ 
+Number  Start     End       Size      Type     File system  Flags
+ 1      0cyl      24cyl     24cyl     primary  ext3
+ 2      25cyl     15735cyl  15710cyl  primary  ext4
+ 3      15735cyl  23382cyl  7646cyl   primary  ext3
+ 4      23383cyl  30400cyl  7018cyl   primary  ext4
+ 
+Model: ATA HDT722525DLA380 (scsi)
+Disk /dev/sdb: 30401,80,62
+Sector size (logical/physical): 512B/512B
+BIOS cylinder,head,sector geometry: 30401,255,63.  Each cylinder is 8225kB.
+Partition Table   : msdos
+Disk Flags: 
+ 
+Number  Start       End           Type     File system  Flags
+ 1      0,1,0       24,254,62     primary  ext3
+ 2      25,0,0      15735,62,6    primary  ext4
+ 3      15735,62,7  23382,0,41    primary  ext3
+ 4      23383,0,0   30400,254,62  primary  ext4
+```
+注意当使用柱面作为单位时，parted和fdisk输出所示的起始柱面和结束柱面之间的明显差异。 这是因为parted开始将柱面计数为0，而fdisk开始将它们计数为1.从chs信息的分开显示可以看出，两个柱面不会在柱面边界上开始（头部不等于0） ）并且两个不在圆柱体边界上结束（扇形不等于62）。
+
+### GPT分区
+使用GUID分区表（GPT）格式化的磁盘不像MBR磁盘那样具有几何概念。 对于这些磁盘，您可以使用gdisk（GPT fdisk）命令或parted。 如果在MBR格式的磁盘上使用gdisk，它将对磁盘进行内存转换为GPT格式。 您可以编写此文件来转换磁盘，但这是一个非常危险的操作，因此请确保在尝试之前有一个好的备份。
+
+注意：GPT设计用于基于UEFI（统一可扩展固件接口）系统，而不是基于BIOS的系统，以便从GPT磁盘启动，尽管有很多方法可以解决这个问题。 在规划分区时请记住这一点。
+
+在清单3中，我们使用parted和-l选项来显示有两个GPT磁盘的系统上所有磁盘的信息。 其中一个（/ dev / sda）是联想在Windows 8中提供的原始固态硬盘（SSD）。第二个（/ dev / sdb）是安装了Ubuntu 15.04的16GB USB闪存盘。
+
+```shell
+ian@yoga-u15:~$ sudo parted -l
+Model: ATA SAMSUNG MZMTD512 (scsi)
+Disk /dev/sda: 512GB
+Sector size (logical/physical): 512B/512B
+Partition Table  : gpt
+Disk Flags: 
+ 
+Number  Start   End     Size    File system  Name                          Flags
+ 1      1049kB  1050MB  1049MB  ntfs         Basic data partition          hidden, diag
+ 2      1050MB  1322MB  273MB   fat32        EFI system partition          boot, hidden, esp
+ 3      1322MB  2371MB  1049MB  fat32        Basic data partition          hidden
+ 4      2371MB  2505MB  134MB                Microsoft reserved partition  msftres
+ 5      2505MB  470GB   467GB   ntfs         Basic data partition          msftdata
+ 6      470GB   497GB   26.8GB  ntfs         Basic data partition          msftdata
+ 7      497GB   512GB   15.5GB  ntfs         Basic data partition          hidden, diag
+ 
+ 
+Model:  USB DISK 2.0 (scsi)
+Disk /dev/sdb: 32.1GB
+Sector size (logical/physical): 512B/512B
+Partition Table  : gpt
+Disk Flags: 
+ 
+Number  Start   End     Size    File system     Name  Flags
+ 1      1049kB  316MB   315MB                         bios_grub
+ 2      316MB   4510MB  4194MB  linux-swap(v1)
+ 3      4510MB  32.1GB  27.6GB  ext4
+ 
+ian@yoga-u15:~$ sudo gdisk -l /dev/sdb
+GPT fdisk (gdisk) version 0.8.10
+ 
+Partition table scan:
+  MBR: protective
+  BSD: not present
+  APM: not present
+  GPT: present
+ 
+Found valid GPT with protective MBR; using GPT.
+Disk /dev/sdb: 62685184 sectors, 29.9 GiB
+Logical sector size: 512 bytes
+Disk identifier (GUID): FEE4E37D-AE90-43A1-A6A7-97ADA4618384
+Partition table holds up to 128 entries
+First usable sector is 34, last usable sector is 62685150
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 4029 sectors (2.0 MiB)
+ 
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048          616447   300.0 MiB   EF02  
+   2          616448         8808447   3.9 GiB     8200  
+   3         8808448        62683135   25.7 GiB    8300
+```
+
+### MBR分区类型
+格式化为MBR使用的IDE驱动器有三种类型的分区：主分区，逻辑分区和扩展分区。分区表位于磁盘的主引导记录（MBR）中。 MBR是磁盘上的第一个扇区，因此分区表不是它的一个很大的部分。这会将磁盘上的主分区数限制为四个。当需要超过四个分区时（通常情况下），其中一个主分区必须成为扩展分区。扩展分区是一个或多个逻辑分区的容器。通过这种方式，您可以使用MBR布局在驱动器上拥有四个以上的分区。
+
+MBR布局还将支持的磁盘的最大大小限制为大约2TB。较新的GUID分区表（或GPT）布局解决了此大小限制以及对分区数量的相当小的限制。使用GPT布局格式化的磁盘默认情况下最多支持128个主分区，不使用扩展或逻辑分区。有关MBR内部以及GUID分区表（GPT）如何工作的更多信息，请参阅MBR，EBR，GPT和LVM内部。
+
+扩展分区只是一个或通常更多逻辑分区的容器。此分区方案最初与MS DOS和PC DOS一起使用，允许DOS，Windows或Linux系统使用PC磁盘。您只能有一个扩展分区，其中的空间必须是连续的。数据存储在扩展分区内的逻辑分区中。如果没有先在其中创建逻辑分区，则无法将数据存储在扩展分区中。
+
+Linux将主分区或扩展分区编号为1到4，因此dev / sda可以有四个主分区，/ dev / sda1，/ dev / sda2，/ dev / sda3和/ dev / sda4。或者它最多可以有三个主分区和一个扩展分区。常见的布局是具有单个主分区/ dev / sda1和扩展分区/ dev / sda2。如果定义了逻辑分区，则它们从5开始编号，因此/ dev / sda上的第一个逻辑分区将是/ dev / sda5，即使磁盘上没有主分区和一个扩展分区（/ dev / sda1）也是如此。因此，如果您在IDE驱动器上需要四个以上的分区，则会丢失一个分区号到扩展分区。虽然对于带有热插拔的内核，IDE驱动器上的理论最大分区数现在限制为15，但您可能会也可能无法创建最后几个。如果计划在驱动器上使用12个以上的分区，请注意检查一切是否正常。
+
+清单4显示了Fedora 22系统上具有主分区，扩展分区和逻辑分区的内部驱动器的parted命令p的输出。请注意不同的文件系统类型，并将它们与之前的列表进行比较，包括GPT列表。
+```bash
+[ian@atticf20 ~]$ sudo parted /dev/sda p
+Model: ATA WDC WD6401AALS-0 (scsi)
+Disk /dev/sda: 640GB
+Sector size (logical/physical): 512B/512B
+Partition Table  : msdos
+Disk Flags: 
+ 
+Number  Start   End     Size    Type      File system     Flags
+ 1      32.3kB  1045MB  1045MB  primary   ext3
+ 2      1045MB  11.5GB  10.5GB  primary   linux-swap(v1)
+ 4      11.5GB  640GB   629GB   extended
+ 5      11.5GB  85.7GB  74.2GB  logical   ext4            boot
+ 6      85.7GB  159GB   73.4GB  logical   ext4
+ 7      159GB   233GB   74.1GB  logical   ext4
+ 8      233GB   307GB   74.1GB  logical   ext3
+ 9      307GB   381GB   73.9GB  logical   ext3
+10      381GB   470GB   89.1GB  logical   ext4
+11      470GB   552GB   82.2GB  logical   ext4
+12      552GB   640GB   87.7GB  logical   ext4
+```
+
+## 逻辑卷管理器（LVM）
+现在您已了解各种类型的分区，您可能想知道如果不为各种分区规划正确的大小会发生什么。 你如何扩展或收缩它们？ 或者如果您需要比单个磁盘的容量更大的空间用于大型文件系统会发生什么？ 快使用逻辑卷管理器（LVM）。使用LVM，您可以抽象化磁盘空间的管理，以便单个文件系统可以跨多个磁盘或分区，您可以轻松地添加或删除文件系统中的空间。 当前版本是lvm2，它向后兼容原始的lvm（有时现在称为lvm1）。
+LVM管理器使用一下三种卷：
+
+- 物理卷(PV)
+- 卷组(VG)
+- 逻辑卷(LV)
+
+物理卷可以是整个驱动器，也可以是驱动器上的分区。虽然LVM可以在没有定义分区的情况下使用整个驱动器，但这通常不是一个好主意，您将在MBR，EBR，GPT和LVM内部部分中看到。
+
+卷组是一个或多个PV的集合。即使底层PV分布在多个分区或多个磁盘上，VG中的空间也会像一个大磁盘一样进行管理。如下所示，底层PV可以是不同的尺寸和不同类型的盘。
+
+逻辑卷类似于物理GPT或MBR分区，因为它是使用特定文件系统类型（如ext4或XFS）格式化的空间单位，然后作为Linux文件系统的一部分进行安装。 LV完全驻留在VG内。
+
+将PV视为物理空间的单元，将其聚合到称为VG的抽象中，这类似于虚拟驱动器。然后将VG或虚拟驱动器分区为LV以供文件系统使用。
+
+在VG中，您可以根据范围管理空间。默认扩展区大小为4MB，通常足够。如果使用更大的扩展区大小，请注意VG中的所有PV必须使用相同的扩展区大小。分配LV或调整LV大小时，分配单位是范围大小。因此默认情况下，LV的倍数为4MB，必须以4MB的倍数递增或缩小。
+
+LVM拼图的最后一部分是设备映射器。这是Linux内核的一部分，为LVM或软件RAID等虚拟设备提供通用基础。
+
+使用LVM的命令通常在lvm2包中。您可以从命令行运行许多命令，也可以运行lvm命令，该命令提供用于运行各种LVM命令的shell。清单5显示了lvm命令以及可以从中运行的各种命令。与其他分区工具一样，除非您具有root权限，否则只有有限的功能。
+
+```bash
+[[ian@atticf20 ~]$ lvm
+  WARNING: Running as a non-root user. Functionality might be unavailable.
+lvm> help
+  /run/lvm/lvmetad.socket: connect failed: Permission denied
+  WARNING: Failed to connect to lvmetad. Falling back to internal scanning.
+  Available lvm commands:
+  Use 'lvm help <command>' for more information
+    
+  devtypes        Display recognised built-in block device types
+  dumpconfig      Dump configuration
+  formats         List available metadata formats
+  help            Display help for commands
+  lvchange        Change the attributes of logical volume(s)
+  lvconvert       Change logical volume layout
+  lvcreate        Create a logical volume
+  lvdisplay       Display information about a logical volume
+  lvextend        Add space to a logical volume
+  lvmchange       With the device mapper, this is obsolete and does nothing.
+  lvmdiskscan     List devices that can be used as physical volumes
+  lvmsadc         Collect activity data
+  lvmsar          Create activity report
+  lvreduce        Reduce the size of a logical volume
+  lvremove        Remove logical volume(s) from the system
+  lvrename        Rename a logical volume
+  lvresize        Resize a logical volume
+  lvs             Display information about logical volumes
+  lvscan          List all logical volumes in all volume groups
+  pvchange        Change attributes of physical volume(s)
+  pvresize        Resize physical volume(s)
+  pvck            Check the consistency of physical volume(s)
+  pvcreate        Initialize physical volume(s) for use by LVM
+  pvdata          Display the on-disk metadata for physical volume(s)
+  pvdisplay       Display various attributes of physical volume(s)
+  pvmove          Move extents from one physical volume to another
+  pvremove        Remove LVM label(s) from physical volume(s)
+  pvs             Display information about physical volumes
+  pvscan          List all physical volumes
+  segtypes        List available segment types
+  tags            List tags defined on this host
+  vgcfgbackup     Backup volume group configuration(s)
+  vgcfgrestore    Restore volume group configuration
+  vgchange        Change volume group attributes
+  vgck            Check the consistency of volume group(s)
+  vgconvert       Change volume group metadata format
+  vgcreate        Create a volume group
+  vgdisplay       Display volume group information
+  vgexport        Unregister volume group(s) from the system
+  vgextend        Add physical volumes to a volume group
+  vgimport        Register exported volume group with system
+  vgmerge         Merge volume groups
+  vgmknodes       Create the special files for volume group devices in /dev
+  vgreduce        Remove physical volume(s) from a volume group
+  vgremove        Remove volume group(s)
+  vgrename        Rename a volume group
+  vgs             Display information about volume groups
+  vgscan          Search for all volume groups
+  vgsplit         Move physical volumes into a new or existing volume group
+  version         Display software and driver version information
+lvm> quit
+  Exiting.
+```
+为了简要介绍LVM的实际应用，清单6显示了USB驱动器上的两个PV，您可以使用pvscan命令在系统上显示PV。
+```bash
+[ian@atticf20 ~]$ sudo pvscan
+  PV /dev/sde8         lvm2 [137.58 GiB]
+  PV /dev/sde7         lvm2 [137.06 GiB]
+  Total: 2 [274.64 GiB] / in use: 0 [0   ] / in no VG: 2 [274.64 GiB]
+```
+现在，您将使用vgcreate命令从这两个PV创建卷组，然后使用lvcreate命令创建一个大于任一PV的逻辑卷。 最后，您将新LV格式化为ext4并将其挂载到/ mnt / lvdemo，如清单7所示。
+```bash
+[ian@atticf20 ~]$ sudo vgcreate demo-vg /dev/sde7 /dev/sde8
+  Volume group "demo-vg" successfully created
+[ian@atticf20 ~]$ sudo lvcreate -L 200G -n demo-lv demo-vg
+  Logical volume "demo-lv" created.
+[ian@atticf20 ~]$ sudo lvscan
+  ACTIVE            '/dev/demo-vg/demo-lv' [200.00 GiB] inherit
+[ian@atticf20 ~]$ sudo mkfs -t ext4 /dev/demo-vg/demo-lv
+mke2fs 1.42.12 (29-Aug-2014)
+Creating filesystem with 52428800 4k blocks and 13107200 inodes
+Filesystem UUID: d8589116-f58f-4e09-ac70-77543afd49da
+Superblock backups stored on blocks: 
+    32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632, 2654208, 
+    4096000, 7962624, 11239424, 20480000, 23887872
+ 
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (32768 blocks): done
+Writing superblocks and filesystem accounting information: done     
+ 
+[ian@atticf20 ~]$ sudo mkdir /mnt/lvdemo
+[ian@atticf20 ~]$ sudo mount /dev/demo-vg/demo-lv /mnt/lvdemo
+[ian@atticf20 ~]$ sudo df -h /mnt/lvdemo/
+Filesystem                     Size  Used Avail Use% Mounted on
+/dev/mapper/demo--vg-demo--lv  197G   60M  187G   1% /mnt/lvdemo
+```
+**注意：**
+- 文件系统命令（如mkfs和mount）使用/ dev / <vg-name> / <lv-name>等名称访问LV。
+- 默认情况下，当您创建LV时，它会立即变为活动状态，如清单7中vgscan命令的输出所示。如果LV位于可移动驱动器上，则需要卸载其上的任何已挂载文件系统，然后将其停用 在从系统中删除驱动器之前使用lvchange命令。
+
+## MBR，EBR，GPT和LVM关联
+在了解分配磁盘空间之前，请先了解一下MBR，EBR，GPT和LVM分区表的内部情况，以帮助强化概念，因为它们很难掌握。
+注意：LPI考试不需要此级别的详细信息，因此如果您按下时间或对内部不太感兴趣，请随意跳至分配磁盘空间。
+不考的暂时不翻译。。。考完补完
+
+## 分配磁盘空间
+如前所述，Linux文件系统是以/为根的单个大型树。 您至少需要文件系统层次结构标准中描述的文件系统。 请参阅表1以获取这些列表或参阅相关主题。 很明显，为什么必须安装软盘或CD-ROM上的数据，但为什么要考虑分离存储在硬盘驱动器上的数据可能不那么明显。 分离文件系统的一些好理由包括：
+
+- 启动文件。 启动时，BIOS，UEFI或引导加载程序必须可以访问某些文件。
+- 多个硬盘。 通常，每个硬盘驱动器将分为一个或多个分区，每个分区都有一个必须安装在文件系统树中某处的文件系统。
+- 可共享的文件。 多个系统映像可以共享静态文件，例如可执行程序文件。 还可以共享动态文件，例如用户主目录或邮件假脱机文件，以便用户可以登录网络上的多台计算机中的任何一台，并仍然使用相同的主目录和邮件系统。
+- 潜在溢出。 如果文件系统可能填充其容量的100％，通常最好将其与运行系统所需的文件分开。
+- 配额。 配额限制用户或组可以在文件系统上占用的空间量。
+- 只读安装。 在日志文件系统出现之前，系统崩溃后恢复文件系统通常需要很长时间。 因此，您可以将很少更改的文件系统（例如可执行程序的目录）挂载为只读，以减少系统崩溃后检查它所花费的时间。
+
+除了到目前为止所涉及的文件系统使用，您还需要考虑在磁盘上分配交换空间。 对于Linux系统，这通常是一个或多个专用分区。
+
+最后，您可能需要考虑具有UEFI固件而非BIOS的系统所需的分区，以及是否应使用磁盘的GPT或MBR格式。
+
+## 做出选择
+假设您正在设置一个至少有一个硬盘驱动器的系统，并且您想要从硬盘驱动器启动。 （本教程不涉及通过LAN引导的无盘工作站的设置或使用Live CD或DVD Linux系统的注意事项。）虽然以后可能会更改分区大小，但这通常需要一些努力，因此要做好预先选择很重要。让我们开始吧。
+
+首先要考虑的是确保您的系统可以启动。某些较旧的系统有一个限制，即BIOS只能从完全位于磁盘前1024个柱面内的分区启动。如果您有这样的系统，那么您必须创建一个最终将作为/ boot挂载的分区，该分区将保存引导系统所需的密钥文件。一旦加载完毕，Linux系统将接管磁盘的操作，1024柱面限制不会影响系统的进一步操作。如果需要为/ boot创建分区，通常大约100兆字节（MB）就足够了。
+
+您的下一个考虑因素可能是所需的交换空间量。使用当前内存价格，交换空间代表非常慢的二级内存。一个常见的经验法则是创建相当于实际RAM量的交换空间。今天，您可能希望为工作站配置一到两倍的实际RAM，这样您就可以使用多个大型程序而不会耗尽RAM。即使在它们之间切换很慢，您可能在任何给定时间只工作一两个。
+
+对于内存非常小的系统，建议使用大的交换空间。对于服务器，您可能希望使用大约一半RAM的交换空间，除非您正在运行推荐不同值的应用程序。无论如何，您应该监视服务器内存使用情况，以便在需要时可以添加实际RAM或在其他服务器之间分配工作负载。在服务器上进行太多交换很少。可以使用交换文件，但专用分区的性能更好。
+
+现在我们来到了分歧点。使用个人工作站往往比使用服务器更难以预测。我的偏好，特别是对于新用户，是将大多数标准目录（/ usr，/ opt，/ var等）分配到单个大分区中。这对于可能不清楚将在线下安装什么的新用户特别有用。运行图形桌面和合理数量的开发工具的工作站可能需要5GB或更多的磁盘空间以及用户需求的空间。一些较大的开发工具每个可能需要几千兆字节。我通常为每个操作系统分配40GB到60GB之间的空间，并且我可以将剩下的磁盘空闲以加载其他发行版。 32GB USB闪存驱动器有3,9GB使用基本的Ubuntu 15.04图形工作站安装，没有其他工具。
+
+服务器工作负载将更加稳定，特定文件系统中的空间不足可能更具灾难性。因此，对于他们来说，您通常会创建多个分区，分布在多个磁盘上，可能使用硬件或软件RAID或逻辑卷组。
+
+您还需要考虑特定文件系统上的工作负载以及文件系统是在多个系统之间共享还是仅由一个系统使用。您可以结合使用经验，容量规划工具和估计增长来确定系统的最佳分配。
+
+无论您是配置工作站还是服务器，您都将拥有某些文件，这些文件对于位于本地驱动器上的每个系统都是唯一的。通常，这些包括/ etc用于系统参数，/ boot用于引导期间所需的文件，/ sbin用于引导或系统恢复所需的文件，/ root用于root用户的主目录，/ var / lock用于锁定文件，/ var / run用于运行系统信息，/ var / log用于此系统的日志文件。根据您的安装需求和首选项，其他文件系统（例如/ home用户主目录，/ usr，/ opt，/ var / mail或/ var / spool / news）可能位于不同的分区或网络安装上。
+
+以上介绍了硬盘布局。
